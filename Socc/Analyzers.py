@@ -177,7 +177,7 @@ def predict(model, xtest, ytest):
     r['sequ'] = r['y'] == r['toppre2']
     r['top2equ']  = r['fequ'] + r['sequ']
     print(pd.concat([pd.DataFrame(pre),r], axis=1))
-    print(np.mean(r['equ']), np.mean(r['fequ'], np.mean(r['sequ'], np.mean(r['top2equ']))
+    print(np.mean(r['equ']), np.mean(r['fequ']), np.mean(r['sequ']), np.mean(r['top2equ']))
     return r
 
 def myloss(y, y_pre, e=0.8):

@@ -28,19 +28,47 @@ def percent2float(ifname='all.xls',ofname="allfix.xls"):
                 d.iloc[i,j] = float(strd[:strd.find("%")])/100
     d.to_excel(ofname)
 
-def getresult(ifname='all.xls',ofname="allfix.xls"):
-    d = pd.read_excel(ifname)
+import pandas as pd
+import numpy as np
+import sklearn as sl
+from sklearn.preprocessing import StandardScaler
 
-    tt = lambda a: 0 if a['host_score']<a['guest_score'] else 2 if a['host_score']>a['guest_score'] else 1
-    d.insert(0,'result',d.apply(tt,axis=1))
-    d.to_excel(ofname)
-#
-# def getresult1(ifname='all.xls',ofname="allfix.xls"):
-#     d = pd.read_excel(ifname)
-#     tt = lambda a: 1 if a['host_score']>a['guest_score'] else 0
-#     d = d.drop('result', axis=1)
-#     d.insert(0,'result',d.apply(tt,axis=1))
-#     d.to_excel(ofname)
-# getresult(ifname='all1.xls',ofname="all1fix.xls")
-# getresult('test1.xls','test1fix.xls')
-percent2float('test1fix.xls','test1.xls')
+def standard(data):
+    ss = StandardScaler()
+    scaler = ss.fit(data)
+    return scaler.transform(data), scaler
+
+def to_matrix(data):
+    return [each.as_matrix() for each in data if type(each) is pd.core.frame.DataFrame or type(each) is pd.core.series.Series]
+
+def sample(data, samplecount=None, rate=None):
+    rcol = data['result']
+    rvalue = list(set(rcol))
+    splitdata = [data[data['result']==each] for each in rvalue]
+    if rate:
+        sampledata = [each.sample(int(each.shape[0]*rate)) for each in splitdata]
+    if samplecount:
+        sampledata = [each.sample(samplecount) for each in splitdata]
+    rdata = pd.concat(sampledata, axis=0)
+    print("sample data with shape ", (rdata.shape))
+    return rdata
+
+
+def k_argmax(data, k=2):
+    r = []
+    for e in data:
+        enum = list(enumerate(e))
+        denum = [(each[1],each[0]) for each in enum]
+
+        se = sorted(e, reverse=True)
+        dindex = []
+        for deach in se:
+            for each in denum:
+                if deach == each[0]:
+                    dindex.append(each[1])
+                    break
+        r.append(dindex[:k])
+    # print(r)
+    # d = np.array([denum[each] for each in data])
+    return np.array(r)
+

@@ -14,10 +14,10 @@ from keras.callbacks import EarlyStopping, LearningRateScheduler
 from keras import backend as K
 from sklearn.decomposition import PCA
 from sklearn.linear_model import RandomizedLogisticRegression as RLR
-import Process as proc
-import staticdata as sd
+import Processors as proc
+import Odatas as sd
 # import tensorflow as tf
-DFILE = "data/all1sample.xls"
+DFILE = "basedata/train1sample.xls"
 FV = 3
 EPTIME = 1000
 BSIZE = 600
@@ -185,7 +185,7 @@ def myloss(y, y_pre, e=0.8):
     # print(np.mean(np.argmax(y_pre, axis=-1)))
     l2 = K.mean(K.cast(K.argmax(y_pre, axis=-1),'float32'))
     l3 = K.categorical_crossentropy(y_pre, K.ones_like(y_pre)/FV)
-    return K.abs(l1-l2)
+    return l1
 
 def mymetrics(y, y_pre):
     a = K.in_top_k(y_pre,K.argmax(y, axis=-1), 2)

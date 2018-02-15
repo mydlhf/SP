@@ -20,8 +20,8 @@ import Odatas as sd
 
 # ROWCT = 1
 TEST = False
-WORKBOOK = "data//train1.xls"
-TEMPBOOK = "basicdata//temp.xls"
+WORKBOOK = "./basedata/train1.xls"
+TEMPBOOK = "./basedata/temp.xls"
 SHEET = "game_data"
 DUMPSIZE = 10
 
@@ -33,6 +33,7 @@ def tprint(*args, sep=' ', end='\n', file=sys.stdout, flush=False):
 def getworkbook(wbname = WORKBOOK, sheetname = SHEET):
     wb = xlwt.Workbook(encoding='utf-8')
     st = wb.add_sheet(sheetname, cell_overwrite_ok=True)
+    # print(wb, st)
     return wb, st
 
 def writecolumns(workbook, sheet, cols=sd.COLUMNNAME):
@@ -737,6 +738,7 @@ def get_basic_info(begin, end, rowcount=None, ids=None):
             if rowcount % 500 == 0:
                 time.sleep(600)
         except:
+            print("something error in %s"%idd)
             continue
     return alldata
 
@@ -857,7 +859,7 @@ def get_info(info, begin=0, end=0):
     #         print("Unexpected error:", sys.exc_info()[0])
 
 def main():
-    data = get_info("ouzhi",122769, 888888)
+    data = get_info("basic",69036, 888888)
     # ids = [712899]
     # ids = [712331,712333,712334,708722,708719,708720,708721,712895,712894,712896,712899,712897,712898,712900,  673115,673420,673418,690233,687672,664972,665528,665532,665535,665531,665530,665536,665537,665534]
 

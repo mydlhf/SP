@@ -709,15 +709,18 @@ def get_team_info(browser):
     # tprint(teamrank)
     return teamrank
 
-def get_basic_info(begin, end, rowcount=None, ids=None):
-    oridata = pd.read_excel(TEMPBOOK)
-    olen = len(oridata)
-    if rowcount == None:
-        rowcount = olen + 1
-        print("Row number begin with %s"%rowcount)
+def get_basic_info(begin, end, cols=sd.COLUMNNAME, rowcount=1, ids=None):
+    # oridata = pd.read_excel(TEMPBOOK)
+    # oridata.columns = cols
     wb, st = getworkbook()
+    writecolumns(wb, st)
+    # writexls(wb, st, data=oridata)
+    # olen = len(oridata)
+    # if rowcount == None:
+    #     rowcount = olen + 1
+    #     print("Row number begin with %s" % rowcount)
     alldata = []
-    idlist = []
+    # idlist = []
     if begin == -1 and ids:
         idlist = ids
     else:
@@ -732,7 +735,7 @@ def get_basic_info(begin, end, rowcount=None, ids=None):
             # print(data)
             if data != None:
                 alldata.append(data)
-                appendxls(wb,st,rowcount=rowcount,data=data)
+                appendxls(wb,st,cols=cols, rowcount=rowcount,data=data)
                 rowcount += 1
             time.sleep(2)
             if rowcount % 500 == 0:
@@ -846,7 +849,7 @@ def process_ouzhi_info(dirname):
 def get_info(info, begin=0, end=0):
     if info == "basic":
         print("get the basic info")
-        data = get_basic_info(begin, end, rowcount=None)
+        data = get_basic_info(begin, end)
     elif info == "ouzhi":
         print("get the ouzhi info.")
         data = get_ouzhi_info(begin, end)
@@ -859,7 +862,7 @@ def get_info(info, begin=0, end=0):
     #         print("Unexpected error:", sys.exc_info()[0])
 
 def main():
-    data = get_info("basic",69036, 888888)
+    data = get_info("basic",90355, 888888)
     # ids = [712899]
     # ids = [712331,712333,712334,708722,708719,708720,708721,712895,712894,712896,712899,712897,712898,712900,  673115,673420,673418,690233,687672,664972,665528,665532,665535,665531,665530,665536,665537,665534]
 

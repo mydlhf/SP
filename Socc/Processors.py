@@ -47,7 +47,12 @@ def sample(data, samplecount=None, rate=None):
     splitdata = [data[data['result']==each] for each in rvalue]
     if rate:
         sampledata = [each.sample(int(each.shape[0]*rate)) for each in splitdata]
-    if samplecount:
+    elif samplecount:
+        print("sample count is %s" % samplecount)
+        sampledata = [each.sample(samplecount) for each in splitdata]
+    else:
+        samplecount = min([len(each) for each in splitdata])
+        print("sample count is %s" %samplecount)
         sampledata = [each.sample(samplecount) for each in splitdata]
     rdata = pd.concat(sampledata, axis=0)
     print("sample data with shape ", (rdata.shape))

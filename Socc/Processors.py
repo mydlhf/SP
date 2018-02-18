@@ -1,9 +1,8 @@
 import pandas as pd
 import numpy as np
-
-def joindata(ifname1='all1.xls', ifname2='all2.xlsx', ofname="all.xls"):
-    d1 = pd.read_excel(ifname1)
-    d2 = pd.read_excel(ifname2)
+from sklearn.utils import shuffle
+def joindata(d1, d2):
+    print("combile the data:")
     d1col = d1.columns
     d2col = d2.columns
     # print(type(d1col), len(d1col), d1col)
@@ -13,20 +12,18 @@ def joindata(ifname1='all1.xls', ifname2='all2.xlsx', ofname="all.xls"):
 
     d1fix = d1[dcol]
     d2fix = d2[dcol]
-
     d = d1fix.append(d2fix)
-    print("write the data:")
-    d.to_excel(ofname)
+    return d
 
-def percent2float(ifname='all.xls',ofname="allfix.xls"):
-    d = pd.read_excel(ifname)
-    sd = d.shape
+def percent2float(data):
+    print("percent to float:")
+    sd = data.shape
     for i in range(sd[0]):
         for j in range(sd[1]):
-            strd = str(d.iloc[i,j])
+            strd = str(data.iloc[i,j])
             if strd.find("%") != -1:
-                d.iloc[i,j] = float(strd[:strd.find("%")])/100
-    d.to_excel(ofname)
+                data.iloc[i,j] = float(strd[:strd.find("%")])/100
+    return data
 
 import pandas as pd
 import numpy as np
@@ -55,6 +52,7 @@ def sample(data, samplecount=None, rate=None):
         print("sample count is %s" %samplecount)
         sampledata = [each.sample(samplecount) for each in splitdata]
     rdata = pd.concat(sampledata, axis=0)
+    rdata = shuffle(rdata)
     print("sample data with shape ", (rdata.shape))
     return rdata
 
@@ -77,3 +75,37 @@ def k_argmax(data, k=2):
     # d = np.array([denum[each] for each in data])
     return np.array(r)
 
+def gen_result(data):
+    print("generate the results:")
+    tt = lambda x: 0 if x['host_score']<x['guest_score'] else 2 if x['host_score']>x['guest_score'] else 1
+    data.insert(0,'result',data.apply(tt, axis=1))
+    return data
+
+def str2int(data, cols=None):
+    print("string to ints:")
+    if not cols:
+        return data
+    else:
+        for each in cols:
+            print("convert the column %s"%each)
+            values = data[each]
+            distinct_values = set(list(values))
+            enum_distinct_values = list(enumerate(distinct_values))
+            dict_distinct_values = {x[1]:x[0] for x in enum_distinct_values}
+            new_values = [dict_distinct_values[v] for v in values]
+            data[each]  = pd.Series(new_values)
+    return data
+
+
+def handle_file(ifname, ofname, *type, C=None):
+    d = pd.read_excel(ifname)
+    if "p2f" in type:
+        d = percent2float(d)
+    if "gen" in type:
+        d = gen_result(d)
+    if "s2i" in type:
+        d = str2int(d, cols=C)
+    d.to_excel(ofname)
+
+
+# handle_file('basedata/train1.xls', 'basedata/train2.xls', 's2i', C=['host_name','guest_name','full_host_name', 'full_guest_name'])

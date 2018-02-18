@@ -20,13 +20,14 @@ from sklearn.utils import shuffle
 import Processors as proc
 import Odatas as sd
 # import tensorflow as tf
-DFILE = "basedata/train1sample.xls"
+
+DFILE = "basedata/train2.xls"
 FV = 6
-EPTIME = 10000
-BSIZE = 100
+EPTIME = 1000
+BSIZE = 10
 DATASPLIT = 0.9
 SCOUNT = 10000
-SRATE = 0.1
+SRATE = 0.9
 def getSparseValue(x, negvalue, posvalue):
     if x>posvalue:
         return 1
@@ -34,7 +35,7 @@ def getSparseValue(x, negvalue, posvalue):
         return -1
     return 0
 
-def getData(fname, split=DATASPLIT, issample=0, isshuffle=True, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
+def getData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
     data = pd.read_excel(fname)
     if issample == 1:
         print("sampling with count!")
@@ -42,7 +43,7 @@ def getData(fname, split=DATASPLIT, issample=0, isshuffle=True, dropcolumns=None
     elif issample == 2:
         print("sampling with rate!")
         data = proc.sample(data, rate=SRATE)
-    else:
+    elif issample == 0:
         print("sampling with minimum count!")
         data = proc.sample(data)
     if isshuffle:
@@ -57,8 +58,8 @@ def getData(fname, split=DATASPLIT, issample=0, isshuffle=True, dropcolumns=None
                 # print(each)
                 data = data.drop(each, axis=1)
     print("filling nan!")
-    data = data.fillna(data.mean())
-
+    # data = data.fillna(data.mean())
+    data = data.dropna()
     datalen = len(data)
     trainlen = int(datalen * split)
 
@@ -259,10 +260,11 @@ def testNN(xtest, ytest):
     # print(model.predict(xtest))
 
 def main():
-    dc = ["game_name", "host_score", "guest_score", 'year', 'game_time', 'round', "host_last_rank",
-                   "guest_last_rank", 'host_name', 'guest_name', 'full_host_name', 'full_guest_name']
+    dc = ["id","game_name", "host_score", "guest_score", 'year', 'game_time', 'round', "host_last_rank",
+                   "guest_last_rank", ]
+    #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
 
-    d = getData(DFILE, dropcolumns=dc, standard=True, tocategorical=True)#, filtercolumn=sd.BCNAME)
+    d = getData(DFILE, dropcolumns=dc, issample=-1, standard=True, tocategorical=True)#, filtercolumn=sd.BCNAME)
 
     # findSupport(data, type="rlr")
     trainNN(d[0], d[1], d[2], d[3])

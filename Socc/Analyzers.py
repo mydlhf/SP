@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import LinearRegression as LR
-from sklearn import svm
-from sklearn.model_selection import cross_val_predict as CP
-from sklearn.utils import shuffle
+
+from keras import initializers
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Dropout
 from keras.optimizers import SGD, Adagrad,RMSprop, Adamax, Nadam, Adam, Adadelta
@@ -11,16 +9,21 @@ from keras.utils import to_categorical
 from keras import losses, regularizers
 from keras.utils import to_categorical
 from keras.callbacks import EarlyStopping, LearningRateScheduler
+from keras.layers.normalization import BatchNormalization
 from keras import backend as K
 from sklearn.decomposition import PCA
 from sklearn.linear_model import RandomizedLogisticRegression as RLR
+from sklearn.linear_model import LinearRegression as LR
+from sklearn import svm
+from sklearn.model_selection import cross_val_predict as CP
+from sklearn.utils import shuffle
 import Processors as proc
 import Odatas as sd
 # import tensorflow as tf
 DFILE = "basedata/train1sample.xls"
-FV = 3
-EPTIME = 1000
-BSIZE = 600
+FV = 6
+EPTIME = 10000
+BSIZE = 100
 DATASPLIT = 0.9
 SCOUNT = 10000
 SRATE = 0.1
@@ -31,7 +34,7 @@ def getSparseValue(x, negvalue, posvalue):
         return -1
     return 0
 
-def getData(fname, split=DATASPLIT, issample=1, isshuffle=True, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
+def getData(fname, split=DATASPLIT, issample=0, isshuffle=True, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
     data = pd.read_excel(fname)
     if issample == 1:
         print("sampling with count!")
@@ -39,6 +42,9 @@ def getData(fname, split=DATASPLIT, issample=1, isshuffle=True, dropcolumns=None
     elif issample == 2:
         print("sampling with rate!")
         data = proc.sample(data, rate=SRATE)
+    else:
+        print("sampling with minimum count!")
+        data = proc.sample(data)
     if isshuffle:
         print("shuffling!")
         data = shuffle(data)
@@ -216,13 +222,21 @@ def trainNN(xtrain, ytrain, xtest, ytest):
     modelfile = 'modelweight.model'  # 神经网络权重保存
     model = Sequential()  # 层次模型
     #32:85%
-    model.add(Dense(60, input_dim=xtrain.shape[1], init='uniform',activation='relu'))#,kernel_regularizer=regularizers.l1(0.01))) # 输入层，Dense表示BP层
+    # model.add(BatchNormalization(momentum=0.9))
+    model.add(Dense(32,
+                    input_dim=xtrain.shape[1],
+                    init='uniform',
+                    # kernel_initializer='he_normal',#initializers.random_normal(stddev=0.01),
+                    # bias_initializer = 'he_normal',
+                    activation='relu'))#,kernel_regularizer=regularizers.l1(0.01))) # 输入层，Dense表示BP层
+    # model.add(BatchNormalization(momentum=0.9))
+    #
     # model.add(Dropout(0.6))
     # model.add(Dense(30, init='uniform',activation='relu'))  # 输出层
-
+    # model.add(BatchNormalization(momentum=0.9))
     model.add(Dense(FV, init='uniform',activation='softmax'))
     # optimizer = RMSprop(lr=0.000001)
-    optimizer = SGD()
+    optimizer = SGD()#lr=0.00001)
     model.compile(loss=myloss,#'binary_crossentropy', #'categorical_crossentropy',#
                   optimizer=optimizer,metrics=["acc",mymetrics]) # 编译模型
     early_stopping = EarlyStopping(monitor='val_loss', patience=6)

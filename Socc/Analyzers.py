@@ -83,7 +83,7 @@ def getTrainData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumn
 
     # print(xtrain, ytrain, xtest, ytest)
 
-    return xtrain, ytrain, xtest, ytest
+    return xtrain, ytrain, xtest, ytest, data
 
 def getTestData(fname, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
     data = pd.read_csv(fname)
@@ -304,9 +304,11 @@ def main():
     #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
 
     traind = getTrainData(TrainFILE, dropcolumns=dc, issample=-1, standard=True, tocategorical=True)#, filtercolumn=sd.BCNAME)
-    describeData(traind)
+    describeData(traind[4])
     # findSupport(data, type="rlr")
     trainNN(traind[0], traind[1], traind[2], traind[3])
     testd = getTestData(TestFILE, split=1, isshuffle=False, dropcolumns=dc)
     testNN("my_model_or1.h5", testd[0], testd[1])
-main()
+
+if __name__ == "__main__":
+    main()

@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import random as rd
 from sklearn.utils import shuffle
 def joindata(d1, d2):
     print("combile the data:")
@@ -75,13 +76,21 @@ def k_argmax(data, k=2):
     # d = np.array([denum[each] for each in data])
     return np.array(r)
 
-def gen_result(data):
+def gen_result(data, gentype=None):
     print("generate the results:")
-    tt = lambda x: 0 if x['host_score']<x['guest_score'] else 2 if x['host_score']>x['guest_score'] else 1
+    if not gentype:
+        tt = lambda x: 0 if x['host_score']<x['guest_score'] else 2 if x['host_score']>x['guest_score'] else 1
+    elif gentype == "sheng":
+        tt = lambda x: 1 if x['host_score'] > x['guest_score'] else 0
+    elif gentype == "ping":
+        tt = lambda x: 1 if x['host_score'] == x['guest_score'] else 0
+    elif gentype == "fu":
+        tt = lambda x: 1 if x['host_score'] < x['guest_score'] else 0
+
     data.insert(0,'result',data.apply(tt, axis=1))
     return data
 
-def str2int(data, cols=None):
+def str2int(data, cols=None):  #将字符串转换为数字表示
     print("string to ints:")
     if not cols:
         return data
@@ -96,16 +105,59 @@ def str2int(data, cols=None):
             data[each]  = pd.Series(new_values)
     return data
 
+def drop_columns(data, dc=None):
+    datacolumns = data.columns
+    if dc:    #del not useful columns
+        print("dropping the columns:", dc)
+        for each in dc:
+            if each in datacolumns:
+                # print(each)
+                data = data.drop(each, axis=1)
+    return data
 
-def handle_file(ifname, ofname, *type, C=None):
+def data_auguments(data, samplerowcount=10, augcount=10000):
+    if not augcount:
+        augcount = data.shape[0] * 2
+    alldata = []
+    newdata = pd.DataFrame()
+    for i in range(augcount):
+        try:
+            index = rd.randint(3, samplerowcount)
+            temp = data.sample(index)
+            newdata = newdata.append(temp.mean(), ignore_index=True)
+            if (i+1)%1000 == 0:
+                alldata.append(newdata)
+                # print([each.shape for each in alldata])
+                newdata = pd.DataFrame()
+                print("generate %s rows"%i)
+        except:
+            print("error in %s row"%i)
+            continue
+    for each in alldata:
+        data = data.append(each)
+
+    return data
+
+def handle_file(ifname, ofname, *type, convertcolumns=None, gentype=None, dropcolumns=None):
     d = pd.read_excel(ifname)
-    if "p2f" in type:
-        d = percent2float(d)
-    if "gen" in type:
-        d = gen_result(d)
-    if "s2i" in type:
-        d = str2int(d, cols=C)
-    d.to_excel(ofname)
+    for each in type:
+        if "p2f" == each:  #percent to float
+            d = percent2float(d)
+        if "gen" == each:  #generate the results
+            d = gen_result(d, gentype)
+        if "s2i" == each:  #string to integer
+            d = str2int(d, cols=convertcolumns)
+        if "dc" == each:  #drop columns
+            d = drop_columns(d, dropcolumns)
+        if "da" == each:
+            d = data_auguments(d, samplerowcount=8, augcount=1000000)
+    d.to_csv(ofname)
 
+def main():
+    dc = ["id", "game_name",  'year', 'game_time', 'round', "host_last_rank",
+          "guest_last_rank", ]
+    #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
+    handle_file('basedata/train2r.xls', 'basedata/train2ra100w.csv', 'da','gen')
 
-# handle_file('basedata/train1.xls', 'basedata/train2.xls', 's2i', C=['host_name','guest_name','full_host_name', 'full_guest_name'])
+if __name__ == "__main__":
+    main()

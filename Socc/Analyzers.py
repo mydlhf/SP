@@ -5,7 +5,6 @@ from keras import initializers
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Dropout
 from keras.optimizers import SGD, Adagrad,RMSprop, Adamax, Nadam, Adam, Adadelta
-from keras.utils import to_categorical
 from keras import losses, regularizers
 from keras.utils import to_categorical
 from keras.callbacks import EarlyStopping, LearningRateScheduler
@@ -21,14 +20,16 @@ import Processors as proc
 import Odatas as sd
 # import tensorflow as tf
 
-TrainFILE = "basedata/train2ra100w.csv"
+MODELNAME = 'my_model_or1.h5'
+TrainFILE = "basedata/train2ra180w.csv"
 TestFILE = "basedata/test1r.csv"
 FV = 3
-EPTIME = 100
-BSIZE = 3000
+EPTIME = 3000
+BSIZE = 1000
 DATASPLIT = 0.8
-SCOUNT = 12000
-SRATE = 1
+SAMPLECOUNT = 12000
+SAMPLERATE = 1
+LEARNRATE = 0.0001
 def getSparseValue(x, negvalue, posvalue):
     if x>posvalue:
         return 1
@@ -40,10 +41,10 @@ def getTrainData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumn
     data = pd.read_csv(fname)
     if issample == 1:
         print("sampling with count!")
-        data = proc.sample(data, samplecount=SCOUNT)
+        data = proc.sample(data, samplecount=SAMPLECOUNT)
     elif issample == 2:
         print("sampling with rate!")
-        data = proc.sample(data, rate=SRATE)
+        data = proc.sample(data, rate=SAMPLERATE)
     elif issample == 0:
         print("sampling with minimum count!")
         data = proc.sample(data)
@@ -112,13 +113,6 @@ def getTestData(fname, dropcolumns=None, standard=True, tocategorical=True, filt
         ytest = pd.DataFrame(to_categorical(ytest, num_classes=FV))
 
     return xtest, ytest
-
-def describeData(data, cols='result'):
-    data.describe()
-    if cols:
-        group = data[cols].groupby(data[cols])
-        print(group.count())
-        print(group.mean())
 
 def computePrecision(x, y, negvalue, posvalue, lr):
     lenx = len(x)
@@ -209,7 +203,7 @@ def predict(model, xtest, ytest):
     # print(xtest, ytest)
     # print(pre)
     r = pd.concat([rpre, toppre, ry], axis=1)
-    # print(r)
+    print(r)
     r['equ'] = r['ypre'] == r['y']
     r['fequ'] = r['y'] == r['toppre1']
     r['sequ'] = r['y'] == r['toppre2']
@@ -277,7 +271,7 @@ def trainNN(xtrain, ytrain, xtest, ytest):
     model.add(BatchNormalization(momentum=0.9))
     model.add(Dense(FV, init='uniform',activation='softmax'))
     # optimizer = RMSprop(lr=0.000001)
-    optimizer = SGD()#lr=0.00001)
+    optimizer = SGD(lr=LEARNRATE)
     model.compile(loss=myloss,#'binary_crossentropy', #'categorical_crossentropy',#
                   optimizer=optimizer,metrics=["acc",mymetrics]) # 编译模型
     early_stopping = EarlyStopping(monitor='val_loss', patience=6)
@@ -287,16 +281,22 @@ def trainNN(xtrain, ytrain, xtest, ytest):
         # lm = model.evaluate(xtest, ytest)
     predict(model, xtest, ytest)
         # print(lm)
-    model.save('my_model_or1.h5')
+    model.save(MODELNAME)
     model.save_weights(modelfile)  # 保存模型权重
 
+def load_and_train(mname, xtrain, ytrain, xtest, ytest):
+    model = load_model(mname, {'myloss': myloss, 'mymetrics': mymetrics})
+    model.fit(xtrain, ytrain, epochs=EPTIME, batch_size=BSIZE, verbose=2,
+              validation_data=(xtest, ytest))  # , callbacks=[early_stopping])#early_stopping])  # 训练模型1000次
+    # lm = model.evaluate(xtest, ytest)
+    predict(model, xtest, ytest)
+    # print(lm)
+    model.save(MODELNAME+"1")
 
 
+def testNN(mname, xtest, ytest):
 
-
-def testNN(modelname, xtest, ytest):
-
-    model = load_model(modelname, {'myloss':myloss, 'mymetrics':mymetrics})
+    model = load_model(mname, {'myloss':myloss, 'mymetrics':mymetrics})
     predict(model, xtest, ytest)
 
 def main():
@@ -304,11 +304,13 @@ def main():
     #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
 
     traind = getTrainData(TrainFILE, dropcolumns=dc, issample=-1, standard=True, tocategorical=True)#, filtercolumn=sd.BCNAME)
-    describeData(traind[4])
-    # findSupport(data, type="rlr")
+    proc.describeData(traind[4])
     trainNN(traind[0], traind[1], traind[2], traind[3])
-    testd = getTestData(TestFILE, split=1, isshuffle=False, dropcolumns=dc)
-    testNN("my_model_or1.h5", testd[0], testd[1])
+    # load_and_train(MODELNAME, traind[0], traind[1], traind[2], traind[3])
+    # findSupport(data, type="rlr")
+
+    testd = getTestData(TestFILE, dropcolumns=dc)
+    testNN(MODELNAME, testd[0], testd[1])
 
 if __name__ == "__main__":
     main()

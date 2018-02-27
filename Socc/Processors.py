@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
 import random as rd
+import Odatas as od
 from sklearn.utils import shuffle
+
 def joindata(d1, d2):
     print("combile the data:")
     d1col = d1.columns
@@ -15,6 +17,14 @@ def joindata(d1, d2):
     d2fix = d2[dcol]
     d = d1fix.append(d2fix)
     return d
+
+def describeData(data, cols='result'):
+    data.describe()
+    if cols:
+        group = data[cols].groupby(data[cols])
+        print(group.count())
+        return group
+    return None
 
 def percent2float(data):
     print("percent to float:")
@@ -76,17 +86,20 @@ def k_argmax(data, k=2):
     # d = np.array([denum[each] for each in data])
     return np.array(r)
 
-def gen_result(data, gentype=None):
+def gen_result(data, gentype=None, err=0.001):  #gentype:None-210 sheng-10 ping-10 fu-10
     print("generate the results:")
+    data['host_score'] = pd.to_numeric(data['host_score'], errors='raise')
+    data['guest_score'] = pd.to_numeric(data['guest_score'], errors='raise')
     if not gentype:
-        tt = lambda x: 0 if x['host_score']<x['guest_score'] else 2 if x['host_score']>x['guest_score'] else 1
+        tt = lambda x: 0 if x['host_score']<x['guest_score']-err else 2 if x['host_score']>x['guest_score']+err else 1
     elif gentype == "sheng":
         tt = lambda x: 1 if x['host_score'] > x['guest_score'] else 0
     elif gentype == "ping":
         tt = lambda x: 1 if x['host_score'] == x['guest_score'] else 0
     elif gentype == "fu":
         tt = lambda x: 1 if x['host_score'] < x['guest_score'] else 0
-
+    if 'result' in data.columns:
+        data = data.drop('result',axis=1)
     data.insert(0,'result',data.apply(tt, axis=1))
     return data
 
@@ -138,7 +151,30 @@ def data_auguments(data, samplerowcount=10, augcount=10000):
 
     return data
 
-def handle_file(ifname, ofname, *type, convertcolumns=None, gentype=None, dropcolumns=None):
+
+def sep_data_auguments(data, samplerowcount=10, augcount=[10000,10000,10000,10000]):
+    data1 = gen_result(data)
+    rcol = data1['result']
+    rvalue = sorted(list(set(rcol)))
+    if len(rvalue) != len(augcount)-1:
+        raise("The split data should have the same lengh-1 with the augcount.")
+
+    splitdata = [data1[data1['result'] == each] for each in rvalue]
+    # augtype = rd.randint(0,4)
+    augdata = [data_auguments(splitdata[i], samplerowcount, augcount[i]) for i in range(len(splitdata))]
+    augdataall = data_auguments(data, samplerowcount, augcount[-1])
+    for each in augdata:
+        data = data.append(each)
+    data = data.append(augdataall)
+    return data
+
+def drop_error_data(data, cols=None, valueset=None):
+    for each in cols:
+        data = data[data[each].str.contains(od.NUMBER_RE)]
+    return data
+
+
+def handle_file(ifname, ofname, *type, convertcolumns=None, gentype=None, dropcolumns=None):  # preprocess the file
     d = pd.read_excel(ifname)
     for each in type:
         if "p2f" == each:  #percent to float
@@ -147,17 +183,24 @@ def handle_file(ifname, ofname, *type, convertcolumns=None, gentype=None, dropco
             d = gen_result(d, gentype)
         if "s2i" == each:  #string to integer
             d = str2int(d, cols=convertcolumns)
+        if "drop" == each:
+            d = drop_error_data(d, cols=['host_score','guest_score'])
         if "dc" == each:  #drop columns
             d = drop_columns(d, dropcolumns)
         if "da" == each:
             d = data_auguments(d, samplerowcount=8, augcount=1000000)
+        if 'sda' == each:
+            d = sep_data_auguments(d, samplerowcount=10, augcount=[600000,600000,450000,150000])
+    # describeData(d, 'result')
     d.to_csv(ofname)
 
 def main():
     dc = ["id", "game_name",  'year', 'game_time', 'round', "host_last_rank",
           "guest_last_rank", ]
     #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
-    handle_file('basedata/train2r.xls', 'basedata/train2ra100w.csv', 'da','gen')
+    handle_file('basedata/train2r.xls', 'basedata/train2ra180w.csv', 'sda','gen')
 
+    # d = pd.read_excel('basedata/train2r.xls')
+    # sep_data_auguments(d)
 if __name__ == "__main__":
     main()

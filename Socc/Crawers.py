@@ -20,8 +20,8 @@ import Odatas as sd
 
 # ROWCT = 1
 TEST = False
-WORKBOOK = "data//train1.xls"
-TEMPBOOK = "basicdata//temp.xls"
+WORKBOOK = "basedata/all.xlsx"
+TEMPBOOK = "basedata/temp.xls"
 SHEET = "game_data"
 DUMPSIZE = 10
 
@@ -709,12 +709,16 @@ def get_team_info(browser):
     return teamrank
 
 def get_basic_info(begin, end, rowcount=None, ids=None):
-    oridata = pd.read_excel(TEMPBOOK)
-    olen = len(oridata)
-    if rowcount == None:
-        rowcount = olen + 1
-        print("Row number begin with %s"%rowcount)
     wb, st = getworkbook()
+    fexist = os.path.exists(TEMPBOOK)
+    if fexist:
+        oridata = pd.read_excel(TEMPBOOK)
+        olen = len(oridata)
+        if rowcount == None:
+            rowcount = olen + 1
+            print("Row number begin with %s"%rowcount)
+    else:
+        writecolumns(wb, st)
     alldata = []
     idlist = []
     if begin == -1 and ids:
@@ -857,7 +861,7 @@ def get_info(info, begin=0, end=0):
     #         print("Unexpected error:", sys.exc_info()[0])
 
 def main():
-    data = get_info("ouzhi",122769, 888888)
+    data = get_info("basic",134131, 888888)
     # ids = [712899]
     # ids = [712331,712333,712334,708722,708719,708720,708721,712895,712894,712896,712899,712897,712898,712900,  673115,673420,673418,690233,687672,664972,665528,665532,665535,665531,665530,665536,665537,665534]
 

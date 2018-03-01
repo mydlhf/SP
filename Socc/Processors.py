@@ -1,9 +1,11 @@
 import pandas as pd
 import numpy as np
+import random as rd
+import Odatas as od
+from sklearn.utils import shuffle
 
-def joindata(ifname1='all1.xls', ifname2='all2.xlsx', ofname="all.xls"):
-    d1 = pd.read_excel(ifname1)
-    d2 = pd.read_excel(ifname2)
+def joindata(d1, d2):
+    print("combile the data:")
     d1col = d1.columns
     d2col = d2.columns
     # print(type(d1col), len(d1col), d1col)
@@ -13,20 +15,26 @@ def joindata(ifname1='all1.xls', ifname2='all2.xlsx', ofname="all.xls"):
 
     d1fix = d1[dcol]
     d2fix = d2[dcol]
-
     d = d1fix.append(d2fix)
-    print("write the data:")
-    d.to_excel(ofname)
+    return d
 
-def percent2float(ifname='all.xls',ofname="allfix.xls"):
-    d = pd.read_excel(ifname)
-    sd = d.shape
+def describeData(data, cols='result'):
+    data.describe()
+    if cols:
+        group = data[cols].groupby(data[cols])
+        print(group.count())
+        return group
+    return None
+
+def percent2float(data):
+    print("percent to float:")
+    sd = data.shape
     for i in range(sd[0]):
         for j in range(sd[1]):
-            strd = str(d.iloc[i,j])
+            strd = str(data.iloc[i,j])
             if strd.find("%") != -1:
-                d.iloc[i,j] = float(strd[:strd.find("%")])/100
-    d.to_excel(ofname)
+                data.iloc[i,j] = float(strd[:strd.find("%")])/100
+    return data
 
 import pandas as pd
 import numpy as np
@@ -55,6 +63,7 @@ def sample(data, samplecount=None, rate=None):
         print("sample count is %s" %samplecount)
         sampledata = [each.sample(samplecount) for each in splitdata]
     rdata = pd.concat(sampledata, axis=0)
+    rdata = shuffle(rdata)
     print("sample data with shape ", (rdata.shape))
     return rdata
 
@@ -77,3 +86,121 @@ def k_argmax(data, k=2):
     # d = np.array([denum[each] for each in data])
     return np.array(r)
 
+def gen_result(data, gentype=None, err=0.001):  #gentype:None-210 sheng-10 ping-10 fu-10
+    print("generate the results:")
+    data['host_score'] = pd.to_numeric(data['host_score'], errors='raise')
+    data['guest_score'] = pd.to_numeric(data['guest_score'], errors='raise')
+    if not gentype:
+        tt = lambda x: 0 if x['host_score']<x['guest_score']-err else 2 if x['host_score']>x['guest_score']+err else 1
+    elif gentype == "sheng":
+        tt = lambda x: 1 if x['host_score'] > x['guest_score'] else 0
+    elif gentype == "ping":
+        tt = lambda x: 1 if x['host_score'] == x['guest_score'] else 0
+    elif gentype == "fu":
+        tt = lambda x: 1 if x['host_score'] < x['guest_score'] else 0
+    if 'result' in data.columns:
+        data = data.drop('result',axis=1)
+    data.insert(0,'result',data.apply(tt, axis=1))
+    return data
+
+def str2int(data, cols=None):  #将字符串转换为数字表示
+    print("string to ints:")
+    if not cols:
+        return data
+    else:
+        for each in cols:
+            print("convert the column %s"%each)
+            values = data[each]
+            distinct_values = set(list(values))
+            enum_distinct_values = list(enumerate(distinct_values))
+            dict_distinct_values = {x[1]:x[0] for x in enum_distinct_values}
+            new_values = [dict_distinct_values[v] for v in values]
+            data[each]  = pd.Series(new_values)
+    return data
+
+def drop_columns(data, dc=None):
+    datacolumns = data.columns
+    if dc:    #del not useful columns
+        print("dropping the columns:", dc)
+        for each in dc:
+            if each in datacolumns:
+                # print(each)
+                data = data.drop(each, axis=1)
+    return data
+
+def data_auguments(data, samplerowcount=10, augcount=10000):
+    if not augcount:
+        augcount = data.shape[0] * 2
+    alldata = []
+    newdata = pd.DataFrame()
+    for i in range(augcount):
+        try:
+            index = rd.randint(3, samplerowcount)
+            temp = data.sample(index)
+            newdata = newdata.append(temp.mean(), ignore_index=True)
+            if (i+1)%1000 == 0:
+                alldata.append(newdata)
+                # print([each.shape for each in alldata])
+                newdata = pd.DataFrame()
+                print("generate %s rows"%i)
+        except:
+            print("error in %s row"%i)
+            continue
+    for each in alldata:
+        data = data.append(each)
+
+    return data
+
+
+def sep_data_auguments(data, samplerowcount=10, augcount=[10000,10000,10000,10000]):
+    data1 = gen_result(data)
+    rcol = data1['result']
+    rvalue = sorted(list(set(rcol)))
+    if len(rvalue) != len(augcount)-1:
+        raise("The split data should have the same lengh-1 with the augcount.")
+
+    splitdata = [data1[data1['result'] == each] for each in rvalue]
+    # augtype = rd.randint(0,4)
+    augdata = [data_auguments(splitdata[i], samplerowcount, augcount[i]) for i in range(len(splitdata))]
+    augdataall = data_auguments(data, samplerowcount, augcount[-1])
+    for each in augdata:
+        data = data.append(each)
+    data = data.append(augdataall)
+    return data
+
+def drop_error_data(data, cols=None, valueset=None):
+    for each in cols:
+        data = data[data[each].str.contains(od.NUMBER_RE)]
+    return data
+
+
+def handle_file(ifname, ofname, *type, convertcolumns=None, gentype=None, dropcolumns=None):  # preprocess the file
+    d = pd.read_excel(ifname)
+    for each in type:
+        if "p2f" == each:  #percent to float
+            d = percent2float(d)
+        if "gen" == each:  #generate the results
+            d = gen_result(d, gentype)
+        if "s2i" == each:  #string to integer
+            d = str2int(d, cols=convertcolumns)
+        if "drop" == each:
+            d = drop_error_data(d, cols=['host_score','guest_score'])
+        if "dc" == each:  #drop columns
+            d = drop_columns(d, dropcolumns)
+        if "da" == each:
+            d = data_auguments(d, samplerowcount=8, augcount=1000000)
+        if 'sda' == each:
+            d = sep_data_auguments(d, samplerowcount=10, augcount=[600000,600000,450000,150000])
+    # describeData(d, 'result')
+    d.to_csv(ofname)
+
+def main():
+    dc = ["id", "game_name",  'year', 'game_time', 'round', "host_last_rank",
+          "guest_last_rank", ]
+    #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
+    handle_file('basedata/train2r.xls', 'basedata/train2ra180w.csv', 'sda','gen')
+
+    # d = pd.read_excel('basedata/train2r.xls')
+    # sep_data_auguments(d)
+if __name__ == "__main__":
+    main()

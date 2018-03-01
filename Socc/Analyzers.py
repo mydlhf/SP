@@ -5,7 +5,6 @@ from keras import initializers
 from keras.models import Sequential, load_model
 from keras.layers.core import Dense, Activation, Dropout
 from keras.optimizers import SGD, Adagrad,RMSprop, Adamax, Nadam, Adam, Adadelta
-from keras.utils import to_categorical
 from keras import losses, regularizers
 from keras.utils import to_categorical
 from keras.callbacks import EarlyStopping, LearningRateScheduler
@@ -20,13 +19,17 @@ from sklearn.utils import shuffle
 import Processors as proc
 import Odatas as sd
 # import tensorflow as tf
-DFILE = "basedata/train1sample.xls"
-FV = 6
-EPTIME = 10000
-BSIZE = 100
-DATASPLIT = 0.9
-SCOUNT = 10000
-SRATE = 0.1
+
+MODELNAME = 'my_model_or1.h5'
+TrainFILE = "basedata/train2ra180w.csv"
+TestFILE = "basedata/test1r.csv"
+FV = 3
+EPTIME = 3000
+BSIZE = 1000
+DATASPLIT = 0.8
+SAMPLECOUNT = 12000
+SAMPLERATE = 1
+LEARNRATE = 0.0001
 def getSparseValue(x, negvalue, posvalue):
     if x>posvalue:
         return 1
@@ -34,31 +37,27 @@ def getSparseValue(x, negvalue, posvalue):
         return -1
     return 0
 
-def getData(fname, split=DATASPLIT, issample=0, isshuffle=True, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
-    data = pd.read_excel(fname)
+def getTrainData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
+    data = pd.read_csv(fname)
     if issample == 1:
         print("sampling with count!")
-        data = proc.sample(data, samplecount=SCOUNT)
+        data = proc.sample(data, samplecount=SAMPLECOUNT)
     elif issample == 2:
         print("sampling with rate!")
-        data = proc.sample(data, rate=SRATE)
-    else:
+        data = proc.sample(data, rate=SAMPLERATE)
+    elif issample == 0:
         print("sampling with minimum count!")
         data = proc.sample(data)
     if isshuffle:
         print("shuffling!")
         data = shuffle(data)
     # data = data.iloc[:3000,:]
-    datacolumns = data.columns
+
     if dropcolumns:    #del not useful columns
-        print("dropping the columns:", dropcolumns)
-        for each in dropcolumns:
-            if each in datacolumns:
-                # print(each)
-                data = data.drop(each, axis=1)
+        data = proc.drop_columns(data, dropcolumns)
     print("filling nan!")
     data = data.fillna(data.mean())
-
+    # data = data.dropna()
     datalen = len(data)
     trainlen = int(datalen * split)
 
@@ -85,8 +84,35 @@ def getData(fname, split=DATASPLIT, issample=0, isshuffle=True, dropcolumns=None
 
     # print(xtrain, ytrain, xtest, ytest)
 
-    return xtrain, ytrain, xtest, ytest
+    return xtrain, ytrain, xtest, ytest, data
 
+def getTestData(fname, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
+    data = pd.read_csv(fname)
+    # data = data.iloc[:3000,:]
+
+    if dropcolumns:    #del not useful columns
+        data = proc.drop_columns(data, dropcolumns)
+    print("filling nan!")
+    data = data.fillna(data.mean())
+
+    xcol = list(data.columns)
+    xcol.remove("result")
+    if filtercolumn:
+        print("filtering!")
+        xcol = filtercolumn
+    ycol = "result"
+    # print(xcol, ycol)
+    x = data[xcol]
+    y = data[ycol]
+
+    xtest = x
+    ytest = y
+    if standard:
+        xtest = pd.DataFrame(proc.standard(xtest)[0])
+    if tocategorical:
+        ytest = pd.DataFrame(to_categorical(ytest, num_classes=FV))
+
+    return xtest, ytest
 
 def computePrecision(x, y, negvalue, posvalue, lr):
     lenx = len(x)
@@ -177,7 +203,7 @@ def predict(model, xtest, ytest):
     # print(xtest, ytest)
     # print(pre)
     r = pd.concat([rpre, toppre, ry], axis=1)
-    # print(r)
+    print(r)
     r['equ'] = r['ypre'] == r['y']
     r['fequ'] = r['y'] == r['toppre1']
     r['sequ'] = r['y'] == r['toppre2']
@@ -223,20 +249,29 @@ def trainNN(xtrain, ytrain, xtest, ytest):
     model = Sequential()  # 层次模型
     #32:85%
     # model.add(BatchNormalization(momentum=0.9))
-    model.add(Dense(32,
+    model.add(Dense(128,
                     input_dim=xtrain.shape[1],
                     init='uniform',
                     # kernel_initializer='he_normal',#initializers.random_normal(stddev=0.01),
                     # bias_initializer = 'he_normal',
                     activation='relu'))#,kernel_regularizer=regularizers.l1(0.01))) # 输入层，Dense表示BP层
-    # model.add(BatchNormalization(momentum=0.9))
-    #
+    model.add(BatchNormalization(momentum=0.9))
     # model.add(Dropout(0.6))
-    # model.add(Dense(30, init='uniform',activation='relu'))  # 输出层
+    # model.add(Dense(64, init='uniform',activation='relu'))  # 输出层
     # model.add(BatchNormalization(momentum=0.9))
+    # model.add(Dense(64, init='uniform', activation='relu'))  # 输出层
+    # model.add(BatchNormalization(momentum=0.9))
+    # model.add(Dense(32, init='uniform', activation='relu'))  # 输出层
+    # model.add(BatchNormalization(momentum=0.9))
+    model.add(Dense(32, init='uniform', activation='sigmoid'))  # 输出层
+    model.add(BatchNormalization(momentum=0.9))
+    model.add(Dense(16, init='uniform', activation='tanh'))  # 输出层
+    model.add(BatchNormalization(momentum=0.9))
+    model.add(Dense(8, init='uniform', activation='relu'))  # 输出层
+    model.add(BatchNormalization(momentum=0.9))
     model.add(Dense(FV, init='uniform',activation='softmax'))
     # optimizer = RMSprop(lr=0.000001)
-    optimizer = SGD()#lr=0.00001)
+    optimizer = SGD(lr=LEARNRATE)
     model.compile(loss=myloss,#'binary_crossentropy', #'categorical_crossentropy',#
                   optimizer=optimizer,metrics=["acc",mymetrics]) # 编译模型
     early_stopping = EarlyStopping(monitor='val_loss', patience=6)
@@ -246,25 +281,36 @@ def trainNN(xtrain, ytrain, xtest, ytest):
         # lm = model.evaluate(xtest, ytest)
     predict(model, xtest, ytest)
         # print(lm)
-    model.save('my_model_or1.h5')
+    model.save(MODELNAME)
     model.save_weights(modelfile)  # 保存模型权重
 
+def load_and_train(mname, xtrain, ytrain, xtest, ytest):
+    model = load_model(mname, {'myloss': myloss, 'mymetrics': mymetrics})
+    model.fit(xtrain, ytrain, epochs=EPTIME, batch_size=BSIZE, verbose=2,
+              validation_data=(xtest, ytest))  # , callbacks=[early_stopping])#early_stopping])  # 训练模型1000次
+    # lm = model.evaluate(xtest, ytest)
+    predict(model, xtest, ytest)
+    # print(lm)
+    model.save(MODELNAME+"1")
 
 
+def testNN(mname, xtest, ytest):
 
-
-def testNN(xtest, ytest):
-    model = load_model("my_model_or1_0.54.h5")
-    lm = model.evaluate(xtest, ytest)
-    # print(model.predict(xtest))
+    model = load_model(mname, {'myloss':myloss, 'mymetrics':mymetrics})
+    predict(model, xtest, ytest)
 
 def main():
-    dc = ["game_name", "host_score", "guest_score", 'year', 'game_time', 'round', "host_last_rank",
-                   "guest_last_rank", 'host_name', 'guest_name', 'full_host_name', 'full_guest_name']
+    dc = [ "host_score", "guest_score", 'host_name', 'guest_name', 'full_host_name', 'full_guest_name']
+    #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
 
-    d = getData(DFILE, dropcolumns=dc, standard=True, tocategorical=True)#, filtercolumn=sd.BCNAME)
-
+    traind = getTrainData(TrainFILE, dropcolumns=dc, issample=-1, standard=True, tocategorical=True)#, filtercolumn=sd.BCNAME)
+    proc.describeData(traind[4])
+    trainNN(traind[0], traind[1], traind[2], traind[3])
+    # load_and_train(MODELNAME, traind[0], traind[1], traind[2], traind[3])
     # findSupport(data, type="rlr")
-    trainNN(d[0], d[1], d[2], d[3])
-    # testNN(xtest, ytest)
-main()
+
+    testd = getTestData(TestFILE, dropcolumns=dc)
+    testNN(MODELNAME, testd[0], testd[1])
+
+if __name__ == "__main__":
+    main()

@@ -711,14 +711,15 @@ def get_team_info(browser):
 def get_basic_info(begin, end, rowcount=None, ids=None):
     wb, st = getworkbook()
     fexist = os.path.exists(TEMPBOOK)
-    if fexist:
-        oridata = pd.read_excel(TEMPBOOK)
-        olen = len(oridata)
-        if rowcount == None:
-            rowcount = olen + 1
-            print("Row number begin with %s"%rowcount)
-    else:
+    if not  fexist:
         writecolumns(wb, st)
+
+    oridata = pd.read_excel(TEMPBOOK)
+    olen = len(oridata)
+    if rowcount == None:
+        rowcount = olen + 1
+        print("Row number begin with %s"%rowcount)
+
     alldata = []
     idlist = []
     if begin == -1 and ids:

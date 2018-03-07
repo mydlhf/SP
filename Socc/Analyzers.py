@@ -21,11 +21,11 @@ import Odatas as sd
 # import tensorflow as tf
 
 MODELNAME = 'my_model_or1.h5'
-TrainFILE = "basedata/train2ra180w.csv"
+TrainFILE = "basedata/trainandtest9-9-10-6.csv"
 TestFILE = "basedata/test1r.csv"
 FV = 3
-EPTIME = 3000
-BSIZE = 1000
+EPTIME = 300
+BSIZE = 300
 DATASPLIT = 0.8
 SAMPLECOUNT = 12000
 SAMPLERATE = 1
@@ -37,8 +37,10 @@ def getSparseValue(x, negvalue, posvalue):
         return -1
     return 0
 
-def getTrainData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
+#standard 1-整体标准化 2-分开标准化 0-不标准化；issample -1-不采样 1-按数量采样 2-按比率采样 0-按最小类别数量采样
+def getTrainData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumns=None, standard=0, tocategorical=True, filtercolumn=None, withtestdata=14):
     data = pd.read_csv(fname)
+
     if issample == 1:
         print("sampling with count!")
         data = proc.sample(data, samplecount=SAMPLECOUNT)
@@ -48,18 +50,16 @@ def getTrainData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumn
     elif issample == 0:
         print("sampling with minimum count!")
         data = proc.sample(data)
-    if isshuffle:
-        print("shuffling!")
-        data = shuffle(data)
+
     # data = data.iloc[:3000,:]
 
     if dropcolumns:    #del not useful columns
         data = proc.drop_columns(data, dropcolumns)
     print("filling nan!")
     data = data.fillna(data.mean())
+
     # data = data.dropna()
-    datalen = len(data)
-    trainlen = int(datalen * split)
+
 
     xcol = list(data.columns)
     xcol.remove("result")
@@ -71,20 +71,36 @@ def getTrainData(fname, split=DATASPLIT, issample=-1, isshuffle=True, dropcolumn
     x = data[xcol]
     y = data[ycol]
 
+
+    if standard == 1:
+        x = pd.DataFrame(proc.standard(x)[0])
+
+    if withtestdata:
+        xtest = x.iloc[-withtestdata:, :]
+        ytest = y.iloc[-withtestdata:]
+        x = x.iloc[:-withtestdata, :]
+        y = y.iloc[:-withtestdata]
+
+    if isshuffle:
+        print("shuffling!")
+        x = shuffle(x)
+    dlen = len(x)
+    trainlen = int(dlen * split)
     xtrain = x.iloc[:trainlen, :]
     ytrain = y.iloc[:trainlen]
-    xtest = x.iloc[trainlen:, :]
-    ytest = y.iloc[trainlen:]
-    if standard:
+    xval = x.iloc[trainlen:, :]
+    yval = y.iloc[trainlen:]
+    if standard == 2:
         xtrain = pd.DataFrame(proc.standard(xtrain)[0])
-        xtest = pd.DataFrame(proc.standard(xtest)[0])
+        xval = pd.DataFrame(proc.standard(xval)[0])
     if tocategorical:
         ytrain = pd.DataFrame(to_categorical(ytrain, num_classes=FV))
+        yval = pd.DataFrame(to_categorical(yval, num_classes=FV))
         ytest = pd.DataFrame(to_categorical(ytest, num_classes=FV))
 
     # print(xtrain, ytrain, xtest, ytest)
 
-    return xtrain, ytrain, xtest, ytest, data
+    return xtrain, ytrain, xval, yval, xtest, ytest, data
 
 def getTestData(fname, dropcolumns=None, standard=True, tocategorical=True, filtercolumn=None):
     data = pd.read_csv(fname)
@@ -182,16 +198,16 @@ def lr_scheduler(epoch, lr_base = 0.01, epochs=20000, lr_power = 0.9, mode='powe
     return lr
 
 def predict(model, xtest, ytest):
+    print(ytest)
     xtest = xtest.as_matrix()
     ytest = ytest.as_matrix()
     pre = model.predict(xtest)
     # ypre = K.argmax(pre, axis=-1)
     # y = K.argmax(ytest,axis=-1)
     rpre = []
-    toppre = []
     for eachx in pre:
         rpre.append(np.argmax(eachx))
-    toppre = pd.DataFrame(proc.k_argmax(pre))
+    toppre = pd.DataFrame(proc.k_argmax(pre, k=2))
     rpre = pd.DataFrame(rpre)
     rpre.columns = ['ypre']
     toppre.columns = ['toppre1','toppre2']
@@ -203,7 +219,7 @@ def predict(model, xtest, ytest):
     # print(xtest, ytest)
     # print(pre)
     r = pd.concat([rpre, toppre, ry], axis=1)
-    print(r)
+    # print(r)
     r['equ'] = r['ypre'] == r['y']
     r['fequ'] = r['y'] == r['toppre1']
     r['sequ'] = r['y'] == r['toppre2']
@@ -243,8 +259,8 @@ def findSupport(alldata=None, type="pca"): #type="pca"and "rlr"
         print(list(zip(alldata[0].columns[sup], scores)))
 
 
-def trainNN(xtrain, ytrain, xtest, ytest):
-    print(xtrain.shape, ytrain.shape, xtest.shape, ytest.shape)
+def trainNN(xtrain, ytrain, xval, yval):
+    print(xtrain.shape, ytrain.shape, xval.shape, yval.shape)
     modelfile = 'modelweight.model'  # 神经网络权重保存
     model = Sequential()  # 层次模型
     #32:85%
@@ -257,29 +273,29 @@ def trainNN(xtrain, ytrain, xtest, ytest):
                     activation='relu'))#,kernel_regularizer=regularizers.l1(0.01))) # 输入层，Dense表示BP层
     model.add(BatchNormalization(momentum=0.9))
     # model.add(Dropout(0.6))
-    # model.add(Dense(64, init='uniform',activation='relu'))  # 输出层
-    # model.add(BatchNormalization(momentum=0.9))
-    # model.add(Dense(64, init='uniform', activation='relu'))  # 输出层
-    # model.add(BatchNormalization(momentum=0.9))
-    # model.add(Dense(32, init='uniform', activation='relu'))  # 输出层
-    # model.add(BatchNormalization(momentum=0.9))
-    model.add(Dense(32, init='uniform', activation='sigmoid'))  # 输出层
+    model.add(Dense(64, init='uniform',activation='relu'))  # 输出层
+    model.add(BatchNormalization(momentum=0.9))
+    model.add(Dense(64, init='uniform', activation='relu'))  # 输出层
+    model.add(BatchNormalization(momentum=0.9))
+    model.add(Dense(32, init='uniform', activation='relu'))  # 输出层
+    model.add(BatchNormalization(momentum=0.9))
+    model.add(Dense(16, init='uniform', activation='sigmoid'))  # 输出层
     model.add(BatchNormalization(momentum=0.9))
     model.add(Dense(16, init='uniform', activation='tanh'))  # 输出层
     model.add(BatchNormalization(momentum=0.9))
     model.add(Dense(8, init='uniform', activation='relu'))  # 输出层
     model.add(BatchNormalization(momentum=0.9))
     model.add(Dense(FV, init='uniform',activation='softmax'))
-    # optimizer = RMSprop(lr=0.000001)
+    # optimizer = (lr=0.000001)
     optimizer = SGD(lr=LEARNRATE)
     model.compile(loss=myloss,#'binary_crossentropy', #'categorical_crossentropy',#
                   optimizer=optimizer,metrics=["acc",mymetrics]) # 编译模型
-    early_stopping = EarlyStopping(monitor='val_loss', patience=6)
+    early_stopping = EarlyStopping(monitor='val_loss', patience=3)
     scheduler = LearningRateScheduler(lr_scheduler)
     # for i in range(1000):
-    model.fit(xtrain, ytrain, epochs=EPTIME, batch_size=BSIZE, verbose=2, validation_data=(xtest, ytest))#, callbacks=[early_stopping])#early_stopping])  # 训练模型1000次
+    model.fit(xtrain, ytrain, epochs=EPTIME, batch_size=BSIZE, verbose=2, validation_data=(xval, yval))#, callbacks=[early_stopping])#early_stopping])  # 训练模型1000次
         # lm = model.evaluate(xtest, ytest)
-    predict(model, xtest, ytest)
+    # predict(model, xtest, ytest)
         # print(lm)
     model.save(MODELNAME)
     model.save_weights(modelfile)  # 保存模型权重
@@ -300,15 +316,17 @@ def testNN(mname, xtest, ytest):
     predict(model, xtest, ytest)
 
 def main():
-    dc = [ "host_score", "guest_score", 'host_name', 'guest_name', 'full_host_name', 'full_guest_name']
+    dc = [ "host_score", "guest_score", ]
     #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
 
-    traind = getTrainData(TrainFILE, dropcolumns=dc, issample=-1, standard=True, tocategorical=True)#, filtercolumn=sd.BCNAME)
-    proc.describeData(traind[4])
+    traind = getTrainData(TrainFILE, dropcolumns=dc, issample=-1, standard=0, tocategorical=True)#, filtercolumn=sd.BCNAME)
+    proc.describeData(traind[6])
     trainNN(traind[0], traind[1], traind[2], traind[3])
+    print("test with uni-standard:")
+    testNN(MODELNAME, traind[4], traind[5])
     # load_and_train(MODELNAME, traind[0], traind[1], traind[2], traind[3])
     # findSupport(data, type="rlr")
-
+    print("test with separate standard:")
     testd = getTestData(TestFILE, dropcolumns=dc)
     testNN(MODELNAME, testd[0], testd[1])
 

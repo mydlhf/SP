@@ -1,4 +1,4 @@
-
+NUMBER_RE= '^(\-|\+)?\d+(\.\d+)?$'
 COLUMNNAME = \
     ['id', 'year','game_name','game_time', 'round',
     'full_host_name', 'host_name', 'host_last_rank', 'host_rank',   'host_score',
@@ -62,4 +62,5 @@ COLUMNNAME = \
     'recent_guestasguest_jinqiulv', 'recent_guestasguest_shiqiulv','recent_guestasguest_jingqiulv',
 
     'future_host_score','future_guest_score']
+
     #'future_host1', 'future_host2', 'future_host3', 'future_guest1', 'future_guest2', 'future_guest3']

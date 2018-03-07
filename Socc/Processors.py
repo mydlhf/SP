@@ -1,16 +1,27 @@
 import pandas as pd
 import numpy as np
 import random as rd
-import Odatas as od
+import sklearn as sl
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
+import Odatas as od
+
+def process_nan(data, ptype=0):
+    if ptype == 0:
+        data = data.fillna(data.mean())
+    elif ptype == 1:
+        data = data.fillna(0)
+    else:
+        data = data.dropna()
+    return data
 
 def joindata(d1, d2):
-    print("combile the data:")
+    print("combine the data:")
     d1col = d1.columns
     d2col = d2.columns
     # print(type(d1col), len(d1col), d1col)
     # print(type(d2col), len(d2col), d2col)
-    dcol = list(set(d1col).intersection(set(d2col)))
+    dcol = [each for each in d1col if each in d2col]
     # print(len(dcol), dcol)
 
     d1fix = d1[dcol]
@@ -27,7 +38,6 @@ def describeData(data, cols='result'):
     return None
 
 def percent2float(data):
-    print("percent to float:")
     sd = data.shape
     for i in range(sd[0]):
         for j in range(sd[1]):
@@ -36,15 +46,22 @@ def percent2float(data):
                 data.iloc[i,j] = float(strd[:strd.find("%")])/100
     return data
 
-import pandas as pd
-import numpy as np
-import sklearn as sl
-from sklearn.preprocessing import StandardScaler
-
-def standard(data):
+def standard(data, cols=None):  #not standard the col columns
+    data = data.reset_index(drop=True)
+    outside = None
+    if cols:
+        datac = data.columns
+        datac = [each for each in datac if each not in cols]
+        outside = pd.DataFrame(data[cols])
+        data = data[datac]
     ss = StandardScaler()
     scaler = ss.fit(data)
-    return scaler.transform(data), scaler
+    data = pd.DataFrame(scaler.transform(data), columns=data.columns)
+    # print(outside, data)
+    # print(outside.shape, data.shape)
+    if outside is not None:
+        data = pd.concat([outside,data], axis=1)
+    return data, scaler  #数据和标准化对象
 
 def to_matrix(data):
     return [each.as_matrix() for each in data if type(each) is pd.core.frame.DataFrame or type(each) is pd.core.series.Series]
@@ -87,7 +104,6 @@ def k_argmax(data, k=2):
     return np.array(r)
 
 def gen_result(data, gentype=None, err=0.001):  #gentype:None-210 sheng-10 ping-10 fu-10
-    print("generate the results:")
     data['host_score'] = pd.to_numeric(data['host_score'], errors='raise')
     data['guest_score'] = pd.to_numeric(data['guest_score'], errors='raise')
     if not gentype:
@@ -104,7 +120,6 @@ def gen_result(data, gentype=None, err=0.001):  #gentype:None-210 sheng-10 ping-
     return data
 
 def str2int(data, cols=None):  #将字符串转换为数字表示
-    print("string to ints:")
     if not cols:
         return data
     else:
@@ -128,31 +143,37 @@ def drop_columns(data, dc=None):
                 data = data.drop(each, axis=1)
     return data
 
-def data_auguments(data, samplerowcount=10, augcount=10000):
+def data_auguments(data, samplerowcount=10, augcount=10000, augtype=["mean", "max", "min"]):
+    result = pd.DataFrame()
     if not augcount:
         augcount = data.shape[0] * 2
+
     alldata = []
     newdata = pd.DataFrame()
     for i in range(augcount):
         try:
             index = rd.randint(3, samplerowcount)
             temp = data.sample(index)
-            newdata = newdata.append(temp.mean(), ignore_index=True)
-            if (i+1)%1000 == 0:
+            augid = rd.randint(0,len(augtype)-1)
+            newdata = newdata.append(temp.apply(augtype[augid]), ignore_index=True)
+
+            if (i+1)%1000 == 0 or i == augcount-1:
                 alldata.append(newdata)
                 # print([each.shape for each in alldata])
                 newdata = pd.DataFrame()
                 print("generate %s rows"%i)
-        except:
-            print("error in %s row"%i)
+
+        except Exception as ex:
+            print("error in %s row:"%i, ex)
             continue
     for each in alldata:
-        data = data.append(each)
+        result = result.append(each)
 
-    return data
+    return result
 
 
 def sep_data_auguments(data, samplerowcount=10, augcount=[10000,10000,10000,10000]):
+    result = pd.DataFrame()
     data1 = gen_result(data)
     rcol = data1['result']
     rvalue = sorted(list(set(rcol)))
@@ -160,46 +181,91 @@ def sep_data_auguments(data, samplerowcount=10, augcount=[10000,10000,10000,1000
         raise("The split data should have the same lengh-1 with the augcount.")
 
     splitdata = [data1[data1['result'] == each] for each in rvalue]
+    # print([each.shape for each in splitdata])
     # augtype = rd.randint(0,4)
     augdata = [data_auguments(splitdata[i], samplerowcount, augcount[i]) for i in range(len(splitdata))]
     augdataall = data_auguments(data, samplerowcount, augcount[-1])
+    print(augdataall.shape)
     for each in augdata:
-        data = data.append(each)
-    data = data.append(augdataall)
-    return data
+        # print(each.shape)
+        result = result.append(each)
+    result = result.append(augdataall)
+    return result
 
-def drop_error_data(data, cols=None, valueset=None):
+def drop_error_data(data, cols=None, valueset=None): #删除包含字符串的行
     for each in cols:
-        data = data[data[each].str.contains(od.NUMBER_RE)]
+        data = data[data[each].astype('str').str.contains(od.NUMBER_RE)]
+        data[each] = data[each].astype('float')
     return data
 
 
-def handle_file(ifname, ofname, *type, convertcolumns=None, gentype=None, dropcolumns=None):  # preprocess the file
-    d = pd.read_excel(ifname)
+def handle_file(ifname, ofname, *type, withtestdata=14, convertcolumns=None, gentype=None):  # preprocess the file
+    if "xls" in ifname:
+        d = pd.read_excel(ifname)
+    else:
+        d = pd.read_csv(ifname)
+    # print(d.dtypes)
     for each in type:
+        if "nan" == each:
+            print("Processing the nan value.")
+            d = process_nan(d)
+        if "std" == each:
+            print("Standarding the data.")
+            d = standard(d, cols=['result'])[0]
         if "p2f" == each:  #percent to float
+            print("Converting the percentage to float value.")
             d = percent2float(d)
         if "gen" == each:  #generate the results
+            print("Generating the results.")
             d = gen_result(d, gentype)
-        if "s2i" == each:  #string to integer
+        if "s2i" == each:  #gamename to integer
+            print("Converting the columns from string to integer.")
             d = str2int(d, cols=convertcolumns)
         if "drop" == each:
+            print("Droping the columns not used.")
             d = drop_error_data(d, cols=['host_score','guest_score'])
         if "dc" == each:  #drop columns
-            d = drop_columns(d, dropcolumns)
+            dc = ["id", "game_name", 'year', 'game_time', 'round', "host_last_rank",
+                  "guest_last_rank", 'host_name', 'guest_name', 'full_host_name', 'full_guest_name']
+            d = drop_columns(d, dc=dc)
         if "da" == each:
-            d = data_auguments(d, samplerowcount=8, augcount=1000000)
+            print("Augmenting the data.")
+            sc = 8
+            augc = 1000000
+            if withtestdata:
+                x = d.iloc[:-withtestdata,:]
+                y = d.iloc[-withtestdata:,:]
+                x = data_auguments(x, samplerowcount=sc, augcount=augc)
+                d = joindata(d, x)
+                d = joindata(d, y)
+            else:
+                r = data_auguments(d, samplerowcount=sc, augcount=augc)
+                d = joindata(d, r)
         if 'sda' == each:
-            d = sep_data_auguments(d, samplerowcount=10, augcount=[600000,600000,450000,150000])
+            print("Separately augmenting the data.")
+            sc = 100
+            augc = [90000,90000,100000,60000]
+            if withtestdata:
+                x = d.iloc[:-withtestdata, :]
+                y = d.iloc[-withtestdata:, :]
+                x = sep_data_auguments(x, samplerowcount=sc, augcount=augc)
+                d = joindata(d, x)
+                d = joindata(d, y)
+            else:
+                r = sep_data_auguments(d, samplerowcount=sc, augcount=augc)
+                d = joindata(d, r)
+    print("data has shape with", d.shape)
     # describeData(d, 'result')
-    d.to_csv(ofname)
+    if "xls" in ofname:
+        d.to_excel(ofname, index=False)
+    else:
+        d.to_csv(ofname, index=False)
 
 def main():
-    dc = ["id", "game_name",  'year', 'game_time', 'round', "host_last_rank",
-          "guest_last_rank", ]
+    #预处理顺序'p2f', 'dc', 'drop', 'sda','gen', 'nan', 'std'
     #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
-    handle_file('basedata/train2r.xls', 'basedata/train2ra180w.csv', 'sda','gen')
-
+    # handle_file('basedata/trainandtest.xls', 'basedata/trainandtest.csv', 'p2f', 'dc','drop')
+    handle_file('basedata/trainandtest.csv', 'basedata/trainandtest9-9-10-6.csv', 'sda', 'gen', 'nan', 'std')
     # d = pd.read_excel('basedata/train2r.xls')
     # sep_data_auguments(d)
 if __name__ == "__main__":

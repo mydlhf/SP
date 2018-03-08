@@ -16,20 +16,54 @@ from sklearn.linear_model import LinearRegression as LR
 from sklearn import svm
 from sklearn.model_selection import cross_val_predict as CP
 from sklearn.utils import shuffle
+import os
+import time
+import xlwt
+import xlrd
 import Processors as proc
-import Odatas as sd
+import Odatas as od
 # import tensorflow as tf
 
-MODELNAME = 'my_model_or1.h5'
-TrainFILE = "basedata/trainandtest9-9-10-6.csv"
-TestFILE = "basedata/test1r.csv"
+
 FV = 3
-EPTIME = 300
+EPTIME = 3
 BSIZE = 300
 DATASPLIT = 0.8
 SAMPLECOUNT = 12000
 SAMPLERATE = 1
-LEARNRATE = 0.0001
+LEARNRATE = 0.01
+
+def to_result(fname, trainfile, testfile, cols=od.RESULTCOLUMN, tt="uni-standard", r=None, aug=od.AUGCOUNT[0]):
+    wb = xlwt.Workbook(encoding='utf-8')
+    st = wb.add_sheet("result", cell_overwrite_ok=True)
+    if not os.path.exists(fname):
+        for i in range(0, len(cols)):
+            st.write(0, i, cols[i])
+        wb.save(fname)
+
+    d = pd.read_excel(fname)
+    lend =len(d)
+    result = {}
+    result['TrainFileName'] = trainfile
+    result['TestFileName'] = testfile
+    result["FV"] = FV
+    result["EpisodeTime"] = EPTIME
+    result["BatchSize"] = BSIZE
+    result["DataSPlit"] = DATASPLIT
+    result["LearningRate"] = LEARNRATE
+    result["TestType"] = tt
+    result["AugmentFu"] =aug[0]
+    result["AugmentPing"] = aug[1]
+    result["AugmentSheng"] = aug[2]
+    result["AugementCombine"] = aug[3]
+    result["TestFirstEqu"], result[ "TestSecEqu"], result["TestTop2Equ"] = np.mean(r['fequ']), np.mean(r['sequ']), np.mean(r['top2equ'])
+    result["Time"] = time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
+    result = pd.DataFrame([list(result.values())], columns=list(result.keys()))
+    d = pd.concat([d,result], axis=0)
+    d.to_excel(fname)
+
+
+
 def getSparseValue(x, negvalue, posvalue):
     if x>posvalue:
         return 1
@@ -259,7 +293,7 @@ def findSupport(alldata=None, type="pca"): #type="pca"and "rlr"
         print(list(zip(alldata[0].columns[sup], scores)))
 
 
-def trainNN(xtrain, ytrain, xval, yval):
+def trainNN(xtrain, ytrain, xval, yval, savemodel):
     print(xtrain.shape, ytrain.shape, xval.shape, yval.shape)
     modelfile = 'modelweight.model'  # 神经网络权重保存
     model = Sequential()  # 层次模型
@@ -297,7 +331,7 @@ def trainNN(xtrain, ytrain, xval, yval):
         # lm = model.evaluate(xtest, ytest)
     # predict(model, xtest, ytest)
         # print(lm)
-    model.save(MODELNAME)
+    model.save(savemodel)
     model.save_weights(modelfile)  # 保存模型权重
 
 def load_and_train(mname, xtrain, ytrain, xtest, ytest):
@@ -307,28 +341,35 @@ def load_and_train(mname, xtrain, ytrain, xtest, ytest):
     # lm = model.evaluate(xtest, ytest)
     predict(model, xtest, ytest)
     # print(lm)
-    model.save(MODELNAME+"1")
+    # model.save(MODELNAME+"1")
 
 
 def testNN(mname, xtest, ytest):
 
     model = load_model(mname, {'myloss':myloss, 'mymetrics':mymetrics})
-    predict(model, xtest, ytest)
+    r = predict(model, xtest, ytest)
+    return r
 
-def main():
-    dc = [ "host_score", "guest_score", ]
-    #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
-
-    traind = getTrainData(TrainFILE, dropcolumns=dc, issample=-1, standard=0, tocategorical=True)#, filtercolumn=sd.BCNAME)
+def single_train():
+    dc = ["host_score", "guest_score", ]
+    # 'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
+    ModelFILE, TrainFILE, TestFILE, ResultFILE = od.gen_file_name()
+    traind = getTrainData(TrainFILE, dropcolumns=dc, issample=-1, standard=0,
+                          tocategorical=True)  # , filtercolumn=sd.BCNAME)
     proc.describeData(traind[6])
-    trainNN(traind[0], traind[1], traind[2], traind[3])
+    trainNN(traind[0], traind[1], traind[2], traind[3], ModelFILE)
     print("test with uni-standard:")
-    testNN(MODELNAME, traind[4], traind[5])
+    r = testNN(ModelFILE, traind[4], traind[5])
+    to_result(ResultFILE, TrainFILE, TestFILE, r=r)
     # load_and_train(MODELNAME, traind[0], traind[1], traind[2], traind[3])
     # findSupport(data, type="rlr")
     print("test with separate standard:")
     testd = getTestData(TestFILE, dropcolumns=dc)
-    testNN(MODELNAME, testd[0], testd[1])
+    r = testNN(ModelFILE, testd[0], testd[1])
+    to_result(ResultFILE, TrainFILE, TestFILE, tt="sep-standard", r=r)
+
+def main():
+    single_train()
 
 if __name__ == "__main__":
     main()

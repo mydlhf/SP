@@ -6,6 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 import Odatas as od
 
+
 def process_nan(data, ptype=0):
     if ptype == 0:
         data = data.fillna(data.mean())
@@ -178,6 +179,7 @@ def sep_data_auguments(data, samplerowcount=10, augcount=[10000,10000,10000,1000
     rcol = data1['result']
     rvalue = sorted(list(set(rcol)))
     if len(rvalue) != len(augcount)-1:
+        print(len(rvalue), len(augcount)-1)
         raise("The split data should have the same lengh-1 with the augcount.")
 
     splitdata = [data1[data1['result'] == each] for each in rvalue]
@@ -199,7 +201,7 @@ def drop_error_data(data, cols=None, valueset=None): #删除包含字符串的�
     return data
 
 
-def handle_file(ifname, ofname, *type, withtestdata=14, convertcolumns=None, gentype=None):  # preprocess the file
+def handle_file(ifname, ofname, *type, withtestdata=14, convertcolumns=None, gentype=None, augc = od.AUGCOUNT[0]):  # preprocess the file
     if "xls" in ifname:
         d = pd.read_excel(ifname)
     else:
@@ -244,7 +246,7 @@ def handle_file(ifname, ofname, *type, withtestdata=14, convertcolumns=None, gen
         if 'sda' == each:
             print("Separately augmenting the data.")
             sc = 100
-            augc = [90000,90000,100000,60000]
+
             if withtestdata:
                 x = d.iloc[:-withtestdata, :]
                 y = d.iloc[-withtestdata:, :]
@@ -264,8 +266,9 @@ def handle_file(ifname, ofname, *type, withtestdata=14, convertcolumns=None, gen
 def main():
     #预处理顺序'p2f', 'dc', 'drop', 'sda','gen', 'nan', 'std'
     #'host_name', 'guest_name', 'full_host_name', 'full_guest_name'
+    ModelFILE, TrainFILE, TestFILE, ResultFILE = od.gen_file_name()
     # handle_file('basedata/trainandtest.xls', 'basedata/trainandtest.csv', 'p2f', 'dc','drop')
-    handle_file('basedata/trainandtest.csv', 'basedata/trainandtest9-9-10-6.csv', 'sda', 'gen', 'nan', 'std')
+    handle_file('basedata/trainandtest.csv', TrainFILE, 'sda', 'gen', 'nan', 'std')
     # d = pd.read_excel('basedata/train2r.xls')
     # sep_data_auguments(d)
 if __name__ == "__main__":
